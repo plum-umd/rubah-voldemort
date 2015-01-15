@@ -89,7 +89,7 @@
     <!-- place to put log4j.properties -->
     <replace-dir dir="${resources.dir}"/>
     <copy file="${java.dir}/log4j.properties" todir="${resources.dir}"/>
-    <javac destdir="${classes.dir}" target="${javac.version}" source="${javac.version}" debug="true" deprecation="false" failonerror="true" includeantruntime="false">
+    <javac destdir="${classes.dir}" target="${javac.version}" source="${javac.version}" debug="true" deprecation="false" failonerror="true" includeantruntime="false" excludes="UpdateClass*">
       <src path="${java.dir}" />
       <classpath refid="main-classpath" />
     </javac>
@@ -546,6 +546,22 @@
       <classpath refid="main-classpath" />
       <arg line="-u ${dist.dir}/UpdateClass-${curr.release}_${prev.release}.java -v0 ${dist.dir}/${name}-${prev.release}.desc -v1 ${dist.dir}/${name}-${curr.release}.desc -o ${dist.dir}/${name}-v0.jar" />
 		</java>
+	</target>
+
+	<target name="compileUpdateClass" depends="skeleton">
+      <javac destdir="${classes.dir}" target="${javac.version}" source="${javac.version}" debug="true" deprecation="false" failonerror="true" includeantruntime="false" includes="UpdateClass*">
+        <classpath refid="main-classpath" />
+		    <classpath location="${dist.dir}/${name}-v0.jar" />
+        <src path="${java.dir}" />
+	    </javac>
+	</target>
+
+	<target name="updatableJar" depends="compileUpdateClass">
+      <jar destfile="${dist.dir}/${name}-${curr.release}-rubah-all.jar" duplicate="preserve" update="yes">
+        <fileset dir="${classes.dir}">
+		      <include name="UpdateClass*class"/>
+        </fileset>
+		  </jar>
 	</target>
 
 </project>
