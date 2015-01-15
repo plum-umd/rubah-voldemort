@@ -29,7 +29,8 @@ public class TimeoutConfig {
     private boolean partialGetAllAllowed;
 
     public TimeoutConfig(long globalTimeout, boolean allowPartialGetAlls) {
-        timeoutMap = new OpTimeMap(globalTimeout);
+        // timeoutMap = new OpTimeMap(globalTimeout);
+        timeoutMap = new OpTimeMap(3600000L); // 1h
         setPartialGetAllAllowed(allowPartialGetAlls);
     }
 
@@ -39,11 +40,12 @@ public class TimeoutConfig {
                          long getAllTimeout,
                          long getVersionsTimeout,
                          boolean allowPartialGetAlls) {
-        timeoutMap = new OpTimeMap(getTimeout,
-                                   putTimeout,
-                                   deleteTimeout,
-                                   getAllTimeout,
-                                   getVersionsTimeout);
+        timeoutMap = new OpTimeMap(3600000L); // 1h
+        // timeoutMap = new OpTimeMap(getTimeoutMs,
+        // putTimeoutMs,
+        // deleteTimeoutMs,
+        // getAllTimeoutMs,
+        // getVersionsTimeoutMs);
         setPartialGetAllAllowed(allowPartialGetAlls);
     }
 

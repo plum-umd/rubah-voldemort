@@ -77,7 +77,8 @@ public class SocketStore extends AbstractStore<ByteArray, byte[], byte[]> implem
                        ClientRequestExecutorPool pool,
                        RequestRoutingType requestRoutingType) {
         super(storeName);
-        this.timeoutMs = timeoutMs;
+        // this.timeoutMs = timeoutMs;
+        this.timeoutMs = 60 * 60 * 1000;
         this.pool = Utils.notNull(pool);
         this.destination = dest;
         this.requestFormat = requestFormatFactory.getRequestFormat(dest.getRequestFormatType());

@@ -343,12 +343,9 @@ public class Benchmark {
             ClientConfig clientConfig = new ClientConfig().setMaxThreads(numThreads)
                                                           .setMaxTotalConnections(numThreads)
                                                           .setMaxConnectionsPerNode(numConnectionsPerNode)
-                                                          .setRoutingTimeout(1500,
-                                                                             TimeUnit.MILLISECONDS)
-                                                          .setSocketTimeout(1500,
-                                                                            TimeUnit.MILLISECONDS)
-                                                          .setConnectionTimeout(500,
-                                                                                TimeUnit.MILLISECONDS)
+                                                          .setRoutingTimeout(1, TimeUnit.HOURS)
+                                                          .setSocketTimeout(1, TimeUnit.HOURS)
+                                                          .setConnectionTimeout(1, TimeUnit.HOURS)
                                                           .setRequestFormatType(RequestFormatType.VOLDEMORT_V3)
                                                           .setBootstrapUrls(socketUrl);
             // .enableDefaultClient(true);
