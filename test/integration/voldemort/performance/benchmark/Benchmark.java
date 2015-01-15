@@ -26,6 +26,7 @@ import java.util.concurrent.TimeUnit;
 
 import joptsimple.OptionParser;
 import joptsimple.OptionSet;
+import joptsimple.ValueConverter;
 import voldemort.ServerTestUtils;
 import voldemort.StaticStoreClientFactory;
 import voldemort.TestUtils;
@@ -507,58 +508,77 @@ public class Benchmark {
     }
 
     public static void main(String args[]) throws IOException {
+        main(args, Benchmark.class);
+    }
+
+    protected static void main(String args[], Class<? extends Benchmark> benchmarkClass)
+            throws IOException {
         // Logger.getRootLogger().removeAllAppenders();
+
+        SuffixInteger converter = new SuffixInteger();
+
         OptionParser parser = new OptionParser();
         parser.accepts(READS, "percentage of --ops-count to be reads; valid values [0-100]")
               .withRequiredArg()
               .describedAs("read-percent")
-              .ofType(Integer.class);
+              .ofType(Integer.class)
+              .withValuesConvertedBy(converter);
         parser.accepts(WRITES, "percentage of --ops-count to be writes; valid values [0-100]")
               .withRequiredArg()
               .describedAs("write-percent")
-              .ofType(Integer.class);
+              .ofType(Integer.class)
+              .withValuesConvertedBy(converter);
         parser.accepts(DELETES, "percentage of --ops-count to be deletes; valid values [0-100]")
               .withRequiredArg()
               .describedAs("delete-percent")
-              .ofType(Integer.class);
+              .ofType(Integer.class)
+              .withValuesConvertedBy(converter);
         parser.accepts(MIXED, "percentage of --ops-count to be updates; valid values [0-100]")
               .withRequiredArg()
               .describedAs("update-percent")
-              .ofType(Integer.class);
+              .ofType(Integer.class)
+              .withValuesConvertedBy(converter);
         parser.accepts(SAMPLE_SIZE,
                        "number of value samples to be obtained from the store for replay based on keys from request-file; 0 means no sample value replay. Default = 0")
               .withRequiredArg()
               .describedAs("sample-size")
-              .ofType(Integer.class);
+              .ofType(Integer.class)
+              .withValuesConvertedBy(converter);
         parser.accepts(VERBOSE, "verbose");
         parser.accepts(THREADS, "max number concurrent worker threads; Default = " + MAX_WORKERS)
               .withRequiredArg()
               .describedAs("num-threads")
-              .ofType(Integer.class);
+              .ofType(Integer.class)
+              .withValuesConvertedBy(converter);
         parser.accepts(NUM_CONNECTIONS_PER_NODE,
                        "max number of connections to any node; Default = "
                                + MAX_CONNECTIONS_PER_NODE)
               .withRequiredArg()
               .describedAs("num-connections-per-node")
-              .ofType(Integer.class);
+              .ofType(Integer.class)
+              .withValuesConvertedBy(converter);
         parser.accepts(ITERATIONS, "number of times to repeat benchmark phase; Default = 1")
               .withRequiredArg()
               .describedAs("num-iter")
-              .ofType(Integer.class);
+              .ofType(Integer.class)
+              .withValuesConvertedBy(converter);
         parser.accepts(VERIFY, "verify values read; runs only if warm-up phase is included");
         parser.accepts(PERCENT_CACHED,
                        "percentage of requests to come from previously requested keys; valid values are in range [0..100]; 0 means caching disabled. Default = 0")
               .withRequiredArg()
               .describedAs("percent")
-              .ofType(Integer.class);
+              .ofType(Integer.class)
+              .withValuesConvertedBy(converter);
         parser.accepts(START_KEY_INDEX, "key index to start warm-up phase from; Default = 0")
               .withRequiredArg()
               .describedAs("index")
-              .ofType(Integer.class);
+              .ofType(Integer.class)
+              .withValuesConvertedBy(converter);
         parser.accepts(INTERVAL, "print status at interval seconds; Default = 0")
               .withRequiredArg()
               .describedAs("sec")
-              .ofType(Integer.class);
+              .ofType(Integer.class)
+              .withValuesConvertedBy(converter);
         parser.accepts(IGNORE_NULLS, "ignore null values in results");
         parser.accepts(PROP_FILE,
                        "file containing all the properties in key=value format; will override all other command line options specified")
@@ -581,7 +601,8 @@ public class Benchmark {
                        "size in bytes for random value; used during warm-up phase and write operation of benchmark phase; Default = 1024")
               .withRequiredArg()
               .describedAs("bytes")
-              .ofType(Integer.class);
+              .ofType(Integer.class)
+              .withValuesConvertedBy(converter);
         parser.accepts(RECORD_SELECTION,
                        "record selection distribution [ " + ZIPFIAN_RECORD_SELECTION + " | "
                                + LATEST_RECORD_SELECTION + " | " + UNIFORM_RECORD_SELECTION
@@ -589,15 +610,18 @@ public class Benchmark {
         parser.accepts(TARGET_THROUGHPUT, "fix throughput")
               .withRequiredArg()
               .describedAs("ops/sec")
-              .ofType(Integer.class);
+              .ofType(Integer.class)
+              .withValuesConvertedBy(converter);
         parser.accepts(RECORD_COUNT, "number of records inserted during warmup phase")
               .withRequiredArg()
               .describedAs("count")
-              .ofType(Integer.class);
+              .ofType(Integer.class)
+              .withValuesConvertedBy(converter);
         parser.accepts(OPS_COUNT, "number of operations to do during benchmark phase")
               .withRequiredArg()
               .describedAs("count")
-              .ofType(Integer.class);
+              .ofType(Integer.class)
+              .withValuesConvertedBy(converter);
         parser.accepts(URL, "for remote tests; url of remote server").withRequiredArg();
         parser.accepts(STORE_NAME, "for remote tests; store name on the remote " + URL)
               .withRequiredArg()
@@ -612,7 +636,8 @@ public class Benchmark {
         parser.accepts(CLIENT_ZONE_ID, "zone id for client; enables zone routing")
               .withRequiredArg()
               .describedAs("zone-id")
-              .ofType(Integer.class);
+              .ofType(Integer.class)
+              .withValuesConvertedBy(converter);
         parser.accepts(HELP);
 
         OptionSet options = parser.parse(args);
@@ -698,7 +723,7 @@ public class Benchmark {
         // Start the benchmark
         Benchmark benchmark = null;
         try {
-            benchmark = new Benchmark();
+            benchmark = benchmarkClass.newInstance();
             benchmark.initialize(mainProps);
             benchmark.warmUpAndRun();
             benchmark.close();
@@ -728,4 +753,42 @@ public class Benchmark {
             return "false";
         }
     }
+
+    public static class SuffixInteger implements ValueConverter<Integer> {
+
+        @Override
+        public Integer convert(String s) {
+            int magnitude = 1;
+
+            // If s.equals(""), this behaves as Integer.parseInt
+            switch(s.toUpperCase().charAt(s.length() - 1)) {
+                case 'G':
+                    magnitude *= 1000;
+                    //$FALL-THROUGH$
+                case 'M':
+                    magnitude *= 1000;
+                    //$FALL-THROUGH$
+                case 'K':
+                    magnitude *= 1000;
+                    s = s.substring(0, s.length() - 1);
+                    break;
+                default:
+                    magnitude = 1;
+                    break;
+            }
+
+            return Integer.parseInt(s) * magnitude;
+        }
+
+        @Override
+        public String valuePattern() {
+            return "[0-9]+[KkMmGg]";
+        }
+
+        @Override
+        public Class<Integer> valueType() {
+            return Integer.class;
+        }
+    }
+
 }
