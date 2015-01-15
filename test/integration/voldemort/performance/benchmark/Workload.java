@@ -327,7 +327,7 @@ public class Workload {
             }
         }
 
-        int opCount = props.getInt(Benchmark.OPS_COUNT);
+        int opCount = props.getInt(Benchmark.OPS_COUNT, -1);
 
         Class<?> keyTypeClass = getKeyTypeClass(keyType);
         int insertStart = props.getInt(Benchmark.START_KEY_INDEX, 0);

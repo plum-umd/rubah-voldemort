@@ -104,6 +104,7 @@ public class Benchmark {
     public static final String RECORD_COUNT = "record-count";
     public static final String PLUGIN_CLASS = "plugin-class";
     public static final String OPS_COUNT = "ops-count";
+    public static final String DURATION = "duration";
 
     public static final String METRIC_TYPE = "metric-type";
     public static final String HISTOGRAM_METRIC_TYPE = "histogram";
@@ -122,7 +123,7 @@ public class Benchmark {
     private StoreClientFactory factory;
 
     private int numThreads, numConnectionsPerNode, numIterations, targetThroughput, recordCount,
-            opsCount, statusIntervalSec;
+            opsCount, statusIntervalSec, duration;
     private double perThreadThroughputPerMs;
     private Workload workLoad;
     private String pluginName;
@@ -159,7 +160,7 @@ public class Benchmark {
                     totalOps += ((ClientThread) thread).getOpsDone();
                 }
 
-                if(totalOps != 0 && totalOps != prevTotalOps) {
+                if(totalOps != 0 /* && totalOps != prevTotalOps */) {
                     System.out.println("[status]\tThroughput(ops/sec): "
                                        + Time.MS_PER_SECOND
                                        * ((double) totalOps / (double) (System.currentTimeMillis() - startTime))
@@ -181,6 +182,7 @@ public class Benchmark {
         private boolean isVerbose;
         private Workload clientWorkLoad;
         private int operationsCount;
+        private int duration;
         private double targetThroughputPerMs;
         private int opsDone;
         private final WorkloadPlugin plugin;
@@ -189,6 +191,7 @@ public class Benchmark {
                             boolean runBenchmark,
                             Workload workLoad,
                             int operationsCount,
+                            int duration,
                             double targetThroughputPerMs,
                             boolean isVerbose,
                             WorkloadPlugin plugin) {
@@ -200,41 +203,59 @@ public class Benchmark {
             this.targetThroughputPerMs = targetThroughputPerMs;
             this.isVerbose = isVerbose;
             this.plugin = plugin;
+            this.duration = duration;
         }
 
         public int getOpsDone() {
             return this.opsDone;
         }
 
+        private boolean performOp(long startTime) {
+            try {
+                if(runBenchmark) {
+                    if(!clientWorkLoad.doTransaction(this.db, plugin)) {
+                        return false;
+                    }
+                } else {
+                    if(!clientWorkLoad.doWrite(this.db, plugin)) {
+                        return false;
+                    }
+                }
+            } catch(Exception e) {
+                if(this.isVerbose)
+                    e.printStackTrace();
+            }
+            opsDone++;
+
+            if(targetThroughputPerMs > 0) {
+                double timePerOp = ((double) opsDone) / targetThroughputPerMs;
+                while(System.currentTimeMillis() - startTime < timePerOp) {
+                    try {
+                        sleep(1);
+                    } catch(InterruptedException e) {}
+                }
+            }
+
+            return true;
+        }
+
         @Override
         public void run() {
             long startTime = System.currentTimeMillis();
-            while(opsDone < this.operationsCount) {
-                try {
-                    if(runBenchmark) {
-                        if(!clientWorkLoad.doTransaction(this.db, plugin)) {
-                            break;
-                        }
-                    } else {
-                        if(!clientWorkLoad.doWrite(this.db, plugin)) {
-                            break;
-                        }
-                    }
-                } catch(Exception e) {
-                    if(this.isVerbose)
-                        e.printStackTrace();
-                }
-                opsDone++;
 
-                if(targetThroughputPerMs > 0) {
-                    double timePerOp = ((double) opsDone) / targetThroughputPerMs;
-                    while(System.currentTimeMillis() - startTime < timePerOp) {
-                        try {
-                            sleep(1);
-                        } catch(InterruptedException e) {}
-                    }
+            if(this.duration > 0) {
+                long endTime = startTime + this.duration;
+                while(System.currentTimeMillis() < endTime) {
+                    if(!this.performOp(startTime))
+                        break;
+                }
+            } else {
+                while(opsDone < this.operationsCount) {
+                    if(!this.performOp(startTime))
+                        break;
                 }
             }
+
         }
     }
 
@@ -299,11 +320,14 @@ public class Benchmark {
             this.perThreadThroughputPerMs = targetPerThread / 1000.0;
         }
 
-        if(workloadProps.containsKey(OPS_COUNT)) {
-            this.opsCount = workloadProps.getInt(OPS_COUNT);
-        } else {
-            throw new VoldemortException("Missing compulsory parameters - " + OPS_COUNT);
+        if(!workloadProps.containsKey(DURATION) && !workloadProps.containsKey(OPS_COUNT)) {
+            throw new VoldemortException("Missing compulsory parameters - " + OPS_COUNT + " and "
+                                         + DURATION);
         }
+
+        this.duration = workloadProps.getInt(DURATION, -1);
+        this.opsCount = workloadProps.getInt(OPS_COUNT, -1);
+
         this.recordCount = workloadProps.getInt(RECORD_COUNT, -1);
         this.pluginName = workloadProps.getString(PLUGIN_CLASS, null);
 
@@ -424,12 +448,15 @@ public class Benchmark {
     public long runTests(boolean runBenchmark) throws Exception {
 
         int localOpsCounts = 0;
+        int localDuration;
         String label = null;
         if(runBenchmark) {
             localOpsCounts = this.opsCount;
+            localDuration = this.duration;
             label = new String("benchmark");
         } else {
             localOpsCounts = this.recordCount;
+            localDuration = -1;
             label = new String("warmup");
         }
         Vector<Thread> threads = new Vector<Thread>();
@@ -457,6 +484,7 @@ public class Benchmark {
                                          runBenchmark,
                                          this.workLoad,
                                          localOpsCounts / this.numThreads,
+                                         localDuration,
                                          this.perThreadThroughputPerMs,
                                          this.verbose,
                                          plugin));
@@ -619,6 +647,11 @@ public class Benchmark {
               .describedAs("count")
               .ofType(Integer.class)
               .withValuesConvertedBy(converter);
+        parser.accepts(DURATION, "duration, in ms, of the benchmark phase")
+              .withRequiredArg()
+              .describedAs("duration")
+              .ofType(Integer.class)
+              .withValuesConvertedBy(converter);
         parser.accepts(URL, "for remote tests; url of remote server").withRequiredArg();
         parser.accepts(STORE_NAME, "for remote tests; store name on the remote " + URL)
               .withRequiredArg()
@@ -674,10 +707,16 @@ public class Benchmark {
                 mainProps.put(RECORD_COUNT, 0);
             }
 
-            if(!options.has(OPS_COUNT)) {
-                printUsage(parser, "Missing " + OPS_COUNT);
+            if(options.has(OPS_COUNT)) {
+                mainProps.put(OPS_COUNT, (Integer) options.valueOf(OPS_COUNT));
             }
-            mainProps.put(OPS_COUNT, (Integer) options.valueOf(OPS_COUNT));
+            if(options.has(DURATION)) {
+                mainProps.put(DURATION, (Integer) options.valueOf(DURATION));
+            }
+
+            if(!options.has(OPS_COUNT) && !options.has(DURATION)) {
+                printUsage(parser, "Missing " + OPS_COUNT + " or " + DURATION);
+            }
 
             if(options.has(URL)) {
                 mainProps.put(URL, (String) options.valueOf(URL));
@@ -725,9 +764,9 @@ public class Benchmark {
             benchmark.warmUpAndRun();
             benchmark.close();
         } catch(Exception e) {
-            if(options.has(VERBOSE)) {
-                e.printStackTrace();
-            }
+            // if(options.has(VERBOSE)) {
+            e.printStackTrace();
+            // }
             parser.printHelpOn(System.err);
             System.exit(-1);
         }
