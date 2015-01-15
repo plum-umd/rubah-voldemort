@@ -61,6 +61,14 @@ import voldemort.xml.StoreDefinitionsMapper;
 
 public class Benchmark {
 
+    private static final String PRINT_CURRENT_OPS = "printCurOps";
+
+    private static final boolean printCurrentOps;
+
+    static {
+        printCurrentOps = System.getProperty(PRINT_CURRENT_OPS) != null;
+    }
+
     private static final int MAX_WORKERS = 8;
     private static final int MAX_CONNECTIONS_PER_NODE = 50;
 
@@ -164,7 +172,10 @@ public class Benchmark {
                     System.out.println("[status]\tThroughput(ops/sec): "
                                        + Time.MS_PER_SECOND
                                        * ((double) totalOps / (double) (System.currentTimeMillis() - startTime))
-                                       + "\tOperations: " + totalOps);
+                                       + "\tOperations: "
+                                       + totalOps
+                                       + (printCurrentOps ? "\tLast: " + (totalOps - prevTotalOps)
+                                                         : ""));
                     Metrics.getInstance().printReport(System.out);
                 }
                 prevTotalOps = totalOps;
