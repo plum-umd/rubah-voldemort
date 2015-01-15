@@ -20,6 +20,8 @@ import java.lang.Thread.UncaughtExceptionHandler;
 
 import org.apache.log4j.Level;
 
+import rubah.Rubah;
+import rubah.RubahThread;
 import voldemort.annotations.jmx.JmxManaged;
 import voldemort.cluster.Node;
 import voldemort.store.UnreachableStoreException;
@@ -46,7 +48,8 @@ public class AsyncRecoveryFailureDetector extends AbstractFailureDetector implem
 
         isRunning = true;
 
-        Thread recoveryThread = new Thread(this, "AsyncNodeRecoverer");
+        Thread recoveryThread = new RubahThread(this);
+        recoveryThread.setName("AsyncNodeRecoverer");
         recoveryThread.setDaemon(true);
         recoveryThread.setUncaughtExceptionHandler(new UncaughtExceptionHandler() {
 
@@ -88,14 +91,21 @@ public class AsyncRecoveryFailureDetector extends AbstractFailureDetector implem
         long asyncRecoveryInterval = getConfig().getAsyncRecoveryInterval();
 
         while(!Thread.currentThread().isInterrupted() && isRunning) {
+            Rubah.update("failureDetector");
             try {
                 if(logger.isDebugEnabled()) {
                     logger.debug("Sleeping for " + asyncRecoveryInterval
                                  + " ms before checking node availability");
                 }
 
+                Rubah.registerBlockingIO();
                 getConfig().getTime().sleep(asyncRecoveryInterval);
-            } catch(InterruptedException e) {
+                Rubah.deregisterBlockingIO();
+            } catch(rubah.io.InterruptedException | InterruptedException e) {
+                if(Rubah.isUpdateRequested()) {
+                    Thread.interrupted();
+                    continue;
+                }
                 break;
             }
 

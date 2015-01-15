@@ -242,7 +242,7 @@ public class RequestCounter {
                 return;
             }
         }
-        logger.info("addRequest lost timing instrumentation data because three retries was insufficient to update the accumulator.");
+        // logger.info("addRequest lost timing instrumentation data because three retries was insufficient to update the accumulator.");
 
         // timing instrumentation (trace only)
         if(logger.isTraceEnabled()) {

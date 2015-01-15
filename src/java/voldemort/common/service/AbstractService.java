@@ -22,6 +22,7 @@ import javax.management.MBeanOperationInfo;
 
 import org.apache.log4j.Logger;
 
+import rubah.Rubah;
 import voldemort.annotations.jmx.JmxGetter;
 import voldemort.annotations.jmx.JmxOperation;
 import voldemort.utils.Utils;
@@ -54,11 +55,13 @@ public abstract class AbstractService implements VoldemortService {
 
     @JmxOperation(description = "Start the service.", impact = MBeanOperationInfo.ACTION)
     public void start() {
-        boolean isntStarted = isStarted.compareAndSet(false, true);
-        if(!isntStarted)
-            throw new IllegalStateException("Server is already started!");
+        if(!Rubah.isUpdating()) {
+            boolean isntStarted = isStarted.compareAndSet(false, true);
+            if(!isntStarted)
+                throw new IllegalStateException("Server is already started!");
 
-        logger.info("Starting " + getType().getDisplayName());
+            logger.info("Starting " + getType().getDisplayName());
+        }
         startInner();
     }
 

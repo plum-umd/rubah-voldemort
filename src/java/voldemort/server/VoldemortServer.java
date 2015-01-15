@@ -27,6 +27,7 @@ import java.util.List;
 
 import org.apache.log4j.Logger;
 
+import rubah.Rubah;
 import voldemort.VoldemortException;
 import voldemort.annotations.jmx.JmxOperation;
 import voldemort.client.protocol.RequestFormatType;
@@ -354,7 +355,12 @@ public class VoldemortServer extends AbstractService {
         JNAUtils.tryMunlockall();
     }
 
+    private static VoldemortServer server;
     public static void main(String[] args) throws Exception {
+        if(Rubah.isUpdating()) {
+            server.start();
+            return;
+        }
         VoldemortConfig config = null;
         try {
             if(args.length == 0)
@@ -371,7 +377,7 @@ public class VoldemortServer extends AbstractService {
             Utils.croak("Error while loading configuration: " + e.getMessage());
         }
 
-        final VoldemortServer server = new VoldemortServer(config);
+        server = new VoldemortServer(config);
         if(!server.isStarted())
             server.start();
 

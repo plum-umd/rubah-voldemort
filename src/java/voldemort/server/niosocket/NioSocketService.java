@@ -19,6 +19,7 @@ package voldemort.server.niosocket;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.channels.ClosedByInterruptException;
+import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.util.concurrent.ExecutorService;
@@ -30,6 +31,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 
+import rubah.io.InterruptedException;
+import rubah.Rubah;
+import rubah.RubahThread;
+import rubah.io.AcceptOperation;
 import voldemort.VoldemortException;
 import voldemort.annotations.jmx.JmxGetter;
 import voldemort.common.service.ServiceType;
@@ -64,6 +69,8 @@ public class NioSocketService extends AbstractSocketService {
 
     private final ServerSocketChannel serverSocketChannel;
 
+    private final Selector serverSelector;
+
     private final InetSocketAddress endpoint;
 
     private final NioSelectorManager[] selectorManagers;
@@ -94,6 +101,7 @@ public class NioSocketService extends AbstractSocketService {
 
         try {
             this.serverSocketChannel = ServerSocketChannel.open();
+            this.serverSelector = Selector.open();
         } catch(IOException e) {
             throw new VoldemortException(e);
         }
@@ -104,7 +112,8 @@ public class NioSocketService extends AbstractSocketService {
         this.selectorManagerThreadPool = Executors.newFixedThreadPool(selectorManagers.length,
                                                                       new DaemonThreadFactory("voldemort-niosocket-server"));
         this.statusManager = new StatusManager((ThreadPoolExecutor) this.selectorManagerThreadPool);
-        this.acceptorThread = new Thread(new Acceptor(), "NioSocketService.Acceptor");
+        this.acceptorThread = new RubahThread(new RubahAcceptor());
+        this.acceptorThread.setName("NioSocketService.Acceptor");
     }
 
     @Override
@@ -216,15 +225,23 @@ public class NioSocketService extends AbstractSocketService {
         }
     }
 
-    private class Acceptor implements Runnable {
+    private class RubahAcceptor implements Runnable {
 
         public void run() {
-            if(logger.isInfoEnabled())
-                logger.info("Server now listening for connections on port " + port);
+            if(!Rubah.isUpdating())
+                if(logger.isInfoEnabled())
+                    logger.info("Server now listening for connections on port " + port);
 
             AtomicInteger counter = new AtomicInteger();
 
+            try {
+                serverSocketChannel.configureBlocking(false);
+            } catch(IOException e) {
+                throw new Error(e);
+            }
+
             while(true) {
+                Rubah.update("acceptor");
                 if(Thread.currentThread().isInterrupted()) {
                     if(logger.isInfoEnabled())
                         logger.info("Acceptor thread interrupted");
@@ -233,7 +250,8 @@ public class NioSocketService extends AbstractSocketService {
                 }
 
                 try {
-                    SocketChannel socketChannel = serverSocketChannel.accept();
+                    SocketChannel socketChannel = new AcceptOperation(serverSelector,
+                                                                      serverSocketChannel).performOperation();
 
                     if(socketChannel == null) {
                         if(logger.isEnabledFor(Level.WARN))
@@ -245,6 +263,8 @@ public class NioSocketService extends AbstractSocketService {
                     NioSelectorManager selectorManager = selectorManagers[counter.getAndIncrement()
                                                                           % selectorManagers.length];
                     selectorManager.accept(socketChannel);
+                } catch(InterruptedException e) {
+                    continue;
                 } catch(ClosedByInterruptException e) {
                     // If you're *really* interested...
                     if(logger.isTraceEnabled())
