@@ -175,7 +175,7 @@
   </target>
 
   <target name="alljar" depends="build, contrib-build" description="Build a jar file that includes all contrib code.">
-    <jar destfile="${dist.dir}/${name}-${curr.release}-all.jar">
+    <jar destfile="${dist.dir}/${name}-${curr.release}-rubah-all.jar" duplicate="preserve">
       <fileset dir="${classes.dir}">
         <include name="**/*.*" />
       </fileset>
@@ -533,5 +533,19 @@
                  password="${tomcat.manager.password}"
                  path="${tomcat.context}"/>
   </target>
+
+	<target name="analyze" depends="alljar">
+		<java classname="rubah.tools.UpdatableJarAnalyzer" dir="." fork="true">
+      <classpath refid="main-classpath" />
+      <arg line="-i ${dist.dir}/${name}-${curr.release}-rubah-all.jar -o ${dist.dir}/${name}-${curr.release}.desc"/>
+		</java>
+	</target>
+
+	<target name="skeleton" depends="analyze">
+		<java classname="rubah.tools.UpdateClassGenerator" dir="." fork="true">
+      <classpath refid="main-classpath" />
+      <arg line="-u ${dist.dir}/UpdateClass-${curr.release}_${prev.release}.java -v0 ${dist.dir}/${name}-${prev.release}.desc -v1 ${dist.dir}/${name}-${curr.release}.desc -o ${dist.dir}/${name}-v0.jar" />
+		</java>
+	</target>
 
 </project>

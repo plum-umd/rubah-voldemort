@@ -26,6 +26,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 
+import rubah.Rubah;
+import rubah.RubahException;
+import rubah.RubahThread;
 import voldemort.VoldemortException;
 
 /**
@@ -88,7 +91,7 @@ import voldemort.VoldemortException;
  * re-balance the remaining requests evenly.
  */
 
-public class SelectorManager implements Runnable {
+public class SelectorManager extends RubahThread {
 
     public static final int SELECTOR_POLL_MS = 500;
 
@@ -176,9 +179,10 @@ public class SelectorManager implements Runnable {
 
     }
 
-    public void run() {
+    public void rubahRun() {
         try {
             while(true) {
+                Rubah.update("selector " + Thread.currentThread().getName());
                 if(isClosed.get()) {
                     if(logger.isInfoEnabled())
                         logger.info("Closed, exiting");
@@ -227,12 +231,15 @@ public class SelectorManager implements Runnable {
                         logger.error(t.getMessage(), t);
                 }
             }
+        } catch(RubahException e) {
+            throw e; // Propagate exception to stop thread due to update
         } catch(Throwable t) {
             if(logger.isEnabledFor(Level.ERROR))
                 logger.error(t.getMessage(), t);
         } finally {
             try {
-                close();
+                if(!Rubah.isUpdateRequested())
+                    close();
             } catch(Exception e) {
                 if(logger.isEnabledFor(Level.ERROR))
                     logger.error(e.getMessage(), e);
